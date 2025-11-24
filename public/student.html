@@ -55,23 +55,31 @@
 
     .subtitle {
         font-size: 16px;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
         color: #333;
+        line-height: 1.4;
     }
 
     .subtitle-small {
         font-size: 13px;
-        margin-bottom: 16px;
+        margin-bottom: 8px;
         color: #555;
+        line-height: 1.4;
+    }
+
+    .input-container {
+        width: 100%;
+        margin-top: 16px;
     }
 
     input {
-        width: 100%;
+        width: 90%;
+        max-width: 350px;
         padding: 14px 12px;
         font-size: 18px;
-        margin-top: 10px;
         border-radius: 12px;
         border: 2px solid #bbb;
+        box-sizing: border-box;
     }
 
     .btn-main {
@@ -104,8 +112,8 @@
 <body>
 <div class="card">
 
-    <!-- ЛОГОТИП — замени src на свой файл -->
-    <img class="logo" src="/logo.png" alt="Логотип">
+    <!-- ЛОГОТИП -->
+    <img class="logo" src="logo.png" alt="Логотип">
 
     <h1>Стань частью России!</h1>
 
@@ -113,7 +121,9 @@
     <div class="subtitle-small">Enter your name and press the button below:</div>
     <div class="subtitle-small">Entrez votre nom et appuyez sur le bouton ci-dessous:</div>
 
-    <input id="name" placeholder="Ваше имя" maxlength="40">
+    <div class="input-container">
+        <input id="name" placeholder="Ваше имя" maxlength="40">
+    </div>
 
     <button class="btn-main" id="send">✨ Я здесь!</button>
 

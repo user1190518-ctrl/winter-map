@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Экран — Карта приветствий</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="screen-wrap">
+    <div class="topbar">
+      <span>Зимняя языковая школа — Открытие</span>
+      <div class="counter" id="count">Участников: 0</div>
+    </div>
+
+    <div id="mapContainer" class="map">
+      <!-- Карта России, загрузка по URL -->
+      <img
+        id="mapImg"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Flag-map_of_Russia.svg/1600px-Flag-map_of_Russia.svg.png"
+        alt="Карта России"
+        style="max-width: 100%; max-height: 100%; object-fit: contain;"
+      />
+    </div>
+  </div>
+
+<script>
+(function(){
+  const url = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws';
+  const ws = new WebSocket(url);
+  const participants = new Map(); 
+  const container = document.getElementById('mapContainer');
+  const counterEl = document.getElementById('count');
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function updateCount() {
+    counterEl.textContent = 'Участников: ' + participants.size;
+  }
+
+  function createBubble(id, name, color) {
+    const rect = container.getBoundingClientRect();
+    const paddingX = rect.width * 0.05;
+    const paddingY = rect.height * 0.05;
+    const x = Math.random() * (rect.width - paddingX*2) + paddingX;
+    const y = Math.random() * (rect.height - paddingY*2) + paddingY;
+
+    const el = document.createElement('div');
+    el.className = 'bubble';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.background = '#fff';
+    el.style.border = '3px solid ' + (color || '#0077d9');
+    el.style.color = '#111';
+    el.innerHTML = 'Добро пожаловать, ' + escapeHtml(name) + '!';
+
+    el.style.transform = 'translate(-50%, -50%)';
+    container.appendChild(el);
+
+    setTimeout(() => {
+      el.style.transition = 'opacity 1.2s, transform 1.2s';
+      el.style.opacity = '0.85';
+      el.style.transform += ' scale(0.98)';
+    }, 2000);
+
+    setTimeout(() => {
+      el.style.transition = 'opacity 800ms';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 900);
+    }, 25000);
+
+    return el;
+  }
+
+  ws.addEventListener('open', () => {
+    ws.send(JSON.stringify({ type: 'request_list' }));
+  });
+
+  ws.addEventListener('message', (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch(e){ return; }
+
+    if (msg.type === 'joined') {
+      participants.set(msg.id, { name: msg.name, color: msg.color });
+      createBubble(msg.id, msg.name, msg.color);
+      updateCount();
+    }
+
+    if (msg.type === 'list') {
+      msg.list.forEach(p => {
+        participants.set(p.id, { name: p.name, color: p.color });
+        setTimeout(() => createBubble(p.id, p.name, p.color), Math.random() * 1200);
+      });
+      updateCount();
+    }
+
+    if (msg.type === 'left') {
+      participants.delete(msg.id);
+      updateCount();
+    }
+  });
+
+  container.addEventListener('click', (e) => {
+    const hint = document.createElement('div');
+    hint.className = 'bubble';
+    hint.style.left = e.clientX + 'px';
+    hint.style.top = e.clientY + 'px';
+    hint.style.transform = 'translate(-50%,-50%)';
+    hint.style.border = '2px dashed rgba(255,255,255,0.6)';
+    hint.style.background = 'rgba(0,0,0,0.6)';
+    hint.style.color = '#fff';
+    hint.textContent = 'Здесь может появиться приветствие';
+    container.appendChild(hint);
+    setTimeout(()=> { hint.remove(); }, 1600);
+  });
+
+})();
+</script>
+</body>
+</html>

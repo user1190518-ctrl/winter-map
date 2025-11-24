@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Стань частью России</title>
+<link rel="stylesheet" href="/style.css">
+
+<style>
+    /* Фоновый градиент */
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: linear-gradient(180deg, 
+            #2ecc71 0%,    /* зелёный */
+            #ffffff 50%,   /* белый */
+            #3498db 100%   /* синий */
+        );
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    /* Центральная карточка */
+    .card {
+        background: #ffffff;
+        width: 100%;
+        max-width: 420px;
+        border-radius: 24px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        padding: 28px 24px;
+        text-align: center;
+        animation: fadeIn 0.6s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo {
+        width: 80px;
+        margin-bottom: 12px;
+        opacity: 0.9;
+    }
+
+    h1 {
+        font-size: 26px;
+        font-weight: 800;
+        margin-bottom: 12px;
+        color: #d63031;
+    }
+
+    .subtitle {
+        font-size: 16px;
+        margin-bottom: 6px;
+        color: #333;
+    }
+
+    .subtitle-small {
+        font-size: 13px;
+        margin-bottom: 16px;
+        color: #555;
+    }
+
+    input {
+        width: 100%;
+        padding: 14px 12px;
+        font-size: 18px;
+        margin-top: 10px;
+        border-radius: 12px;
+        border: 2px solid #bbb;
+    }
+
+    .btn-main {
+        margin-top: 24px;
+        width: 100%;
+        padding: 14px 0;
+        font-size: 20px;
+        border: none;
+        border-radius: 14px;
+        background: linear-gradient(90deg, #1e3799, #b71540);
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .btn-main:active {
+        transform: scale(0.97);
+    }
+
+    #greeting {
+        margin-top: 18px;
+        font-size: 18px;
+        color: #1e3799;
+        display: none;
+    }
+</style>
+</head>
+
+<body>
+<div class="card">
+
+    <!-- ЛОГОТИП — замени src на свой файл -->
+    <img class="logo" src="/logo.png" alt="Логотип">
+
+    <h1>Стань частью России!</h1>
+
+    <div class="subtitle">Введите своё имя и нажмите кнопку ниже:</div>
+    <div class="subtitle-small">Enter your name and press the button below:</div>
+    <div class="subtitle-small">Entrez votre nom et appuyez sur le bouton ci-dessous:</div>
+
+    <input id="name" placeholder="Ваше имя" maxlength="40">
+
+    <button class="btn-main" id="send">✨ Я здесь!</button>
+
+    <div id="greeting"></div>
+</div>
+
+<script>
+(function(){
+  const url = (location.protocol === 'https:' ? 'wss':'ws') + '://' + location.host + '/ws';
+  const ws = new WebSocket(url);
+
+  function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({
+          '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+      }[c]));
+  }
+
+  ws.addEventListener('message', (ev) => {
+      try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'ack') {
+              const g = document.getElementById('greeting');
+              g.style.display = 'block';
+              g.innerHTML = "Добро пожаловать, " + escapeHtml(msg.name) + "!";
+          }
+      } catch(e){}
+  });
+
+  document.getElementById('send').addEventListener('click', () => {
+      const name = document.getElementById('name').value.trim();
+      if (!name) return alert("Введите имя");
+      const color = '#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0');
+      ws.send(JSON.stringify({ type: 'join', name, color }));
+  });
+})();
+</script>
+
+</body>
+</html>

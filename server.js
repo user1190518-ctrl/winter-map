@@ -19,17 +19,10 @@ app.get('/screen', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'screen.html'));
 });
 
-// Fallback для прямых запросов к HTML файлам
-app.get('*.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', req.path));
-});
-
 // Запуск HTTP сервера
 const server = app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`📁 Serving files from: ${path.join(__dirname, 'public')}`);
-    console.log(`🌐 Student page: https://winter-map.onrender.com/`);
-    console.log(`📺 Screen page: https://winter-map.onrender.com/screen`);
 });
 
 // WebSocket сервер
@@ -38,26 +31,42 @@ const wss = new WebSocket.Server({
     path: '/ws'
 });
 
-wss.on('connection', (ws) => {
-    console.log('🔗 New WebSocket connection');
+// Хранилище подключений
+const connections = {
+    students: new Set(),
+    screens: new Set()
+};
+
+wss.on('connection', (ws, req) => {
+    console.log('🔗 New WebSocket connection:', req.url);
     
+    // Определяем тип клиента по URL
+    const isScreen = req.url.includes('screen');
+    
+    if (isScreen) {
+        connections.screens.add(ws);
+        console.log('📺 Screen connected');
+    } else {
+        connections.students.add(ws);
+        console.log('👤 Student connected');
+    }
+
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message.toString());
             console.log('📨 Received:', data);
             
             if (data.type === 'join') {
-                // Отправляем подтверждение обратно отправителю
+                // Отправляем подтверждение студенту
                 ws.send(JSON.stringify({
                     type: 'ack',
-                    name: data.name,
-                    color: data.color
+                    name: data.name
                 }));
                 
-                // Рассылаем всем клиентам на экране
-                wss.clients.forEach(client => {
-                    if (client !== ws && client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
+                // Рассылаем всем экранам
+                connections.screens.forEach(screen => {
+                    if (screen.readyState === WebSocket.OPEN) {
+                        screen.send(JSON.stringify({
                             type: 'joined', 
                             name: data.name,
                             color: data.color,
@@ -65,6 +74,8 @@ wss.on('connection', (ws) => {
                         }));
                     }
                 });
+                
+                console.log(`🎉 Sent welcome for: ${data.name}`);
             }
         } catch (error) {
             console.error('❌ Error parsing message:', error);
@@ -72,13 +83,24 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
-        console.log('🔌 Client disconnected');
+        if (isScreen) {
+            connections.screens.delete(ws);
+            console.log('📺 Screen disconnected');
+        } else {
+            connections.students.delete(ws);
+            console.log('👤 Student disconnected');
+        }
     });
 
     ws.on('error', (error) => {
         console.error('💥 WebSocket error:', error);
     });
 });
+
+// Статистика
+setInterval(() => {
+    console.log(`📊 Connections: ${connections.students.size} students, ${connections.screens.size} screens`);
+}, 30000);
 
 process.on('SIGTERM', () => {
     console.log('🛑 SIGTERM received, shutting down gracefully');

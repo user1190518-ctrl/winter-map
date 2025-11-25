@@ -6,28 +6,28 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Правильное обслуживание статических файлов
-app.use(express.static(__dirname));
+// Обслуживание статических файлов из папки public
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // Явные маршруты для HTML страниц
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'student.html'));
+    res.sendFile(path.join(__dirname, 'public', 'student.html'));
 });
 
 app.get('/screen', (req, res) => {
-    res.sendFile(path.join(__dirname, 'screen.html'));
+    res.sendFile(path.join(__dirname, 'public', 'screen.html'));
 });
 
 // Fallback для прямых запросов к HTML файлам
 app.get('*.html', (req, res) => {
-    res.sendFile(path.join(__dirname, req.path));
+    res.sendFile(path.join(__dirname, 'public', req.path));
 });
 
 // Запуск HTTP сервера
 const server = app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📁 Serving files from: ${__dirname}`);
+    console.log(`📁 Serving files from: ${path.join(__dirname, 'public')}`);
     console.log(`🌐 Student page: https://winter-map.onrender.com/`);
     console.log(`📺 Screen page: https://winter-map.onrender.com/screen`);
 });

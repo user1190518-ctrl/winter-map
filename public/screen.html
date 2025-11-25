@@ -24,7 +24,7 @@
         position: fixed;
         left: 20px;
         top: 20px;
-        width: 220px;   /* увеличено */
+        width: 220px;
         opacity: 0.95;
         z-index: 10;
     }
@@ -33,7 +33,7 @@
         position: fixed;
         right: 20px;
         top: 20px;
-        width: 180px;   /* увеличено */
+        width: 180px;
         opacity: 0.95;
         z-index: 10;
     }
@@ -85,6 +85,8 @@
         white-space: nowrap;
         pointer-events: none;
         z-index: 20;
+        max-width: 300px;
+        text-align: center;
     }
 
     @keyframes bubbleIn {
@@ -94,7 +96,8 @@
     }
 
     @keyframes floatUp {
-        0% { transform: translateY(0); }
+        0% { transform: translateY(0); opacity: 1; }
+        80% { transform: translateY(-120px); opacity: 0.8; }
         100% { transform: translateY(-140px); opacity: 0; }
     }
 
@@ -109,9 +112,10 @@
         opacity: 0.85;
         filter: drop-shadow(0 0 6px rgba(255,255,255,1));
         pointer-events: none;
-        z-index: 2; /* ниже пузырей */
+        z-index: 2;
         animation-name: fall;
         animation-timing-function: linear;
+        animation-iteration-count: infinite;
     }
 
     @keyframes fall {
@@ -124,27 +128,88 @@
             opacity: 1;
         }
     }
+
+    /* ────────────────────────────────
+       СТАТУС ПОДКЛЮЧЕНИЯ
+       ──────────────────────────────── */
+    .connection-status {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 8px 16px;
+        border-radius: 20px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-size: 14px;
+        z-index: 100;
+        transition: all 0.3s ease;
+    }
+
+    .connection-status.connected {
+        background: rgba(46, 204, 113, 0.9);
+    }
+
+    .connection-status.disconnected {
+        background: rgba(231, 76, 60, 0.9);
+    }
+
+    .connection-status.connecting {
+        background: rgba(241, 196, 15, 0.9);
+    }
+
+    /* ────────────────────────────────
+       СЧЕТЧИК УЧАСТНИКОВ
+       ──────────────────────────────── */
+    .counter {
+        position: fixed;
+        top: 100px;
+        right: 30px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 15px 20px;
+        border-radius: 15px;
+        border: 2px solid #d63031;
+        font-size: 18px;
+        font-weight: bold;
+        color: #d63031;
+        z-index: 10;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
 </style>
 </head>
 
 <body>
 
 <!-- ЛОГОТИПЫ -->
-<img src="/logo2.png" class="logo-left">
-<img src="/logo.png" class="logo-right">
+<img src="logo2.png" class="logo-left" alt="Логотип 1">
+<img src="logo.png" class="logo-right" alt="Логотип 2">
 
 <!-- ЗАГОЛОВОК -->
 <div class="title">Школа русского языка и культуры России 2025</div>
 
+<!-- СЧЕТЧИК УЧАСТНИКОВ -->
+<div class="counter">
+    Участников: <span id="participantCount">0</span>
+</div>
+
 <!-- КАРТА -->
-<img src="/map.png" class="map">
+<img src="map.png" class="map" alt="Карта России">
+
+<!-- СТАТУС ПОДКЛЮЧЕНИЯ -->
+<div id="connectionStatus" class="connection-status connecting">
+    ⌛ Подключение к серверу...
+</div>
 
 <script>
 /*** WebSocket: принимаем имена и создаём пузырьки ***/
 (function(){
-
     const url = (location.protocol === 'https:' ? 'wss':'ws') + '://' + location.host + '/ws';
     const ws = new WebSocket(url);
+
+    let isConnected = false;
+    let participantCount = 0;
+    const connectionStatus = document.getElementById('connectionStatus');
+    const participantCountElement = document.getElementById('participantCount');
 
     function escapeHtml(s) {
         return s.replace(/[&<>"']/g, c => ({
@@ -152,33 +217,98 @@
         }[c]));
     }
 
-    ws.addEventListener('message', (ev) => {
-        try {
-            const msg = JSON.parse(ev.data);
-            if (msg.type === 'join') {
-                showBubble(msg.name);
-            }
-        } catch(e){}
+    function updateConnectionStatus(message, status) {
+        connectionStatus.textContent = message;
+        connectionStatus.className = 'connection-status ' + status;
+    }
+
+    function updateParticipantCount() {
+        participantCountElement.textContent = participantCount;
+    }
+
+    // Обработчик открытия соединения
+    ws.addEventListener('open', () => {
+        console.log('📺 Screen WebSocket connected');
+        isConnected = true;
+        updateConnectionStatus('✓ Подключено к серверу', 'connected');
     });
 
-    function showBubble(name) {
+    // Обработчик ошибок
+    ws.addEventListener('error', (error) => {
+        console.error('📺 WebSocket error:', error);
+        updateConnectionStatus('✗ Ошибка подключения', 'disconnected');
+    });
+
+    // Обработчик закрытия соединения
+    ws.addEventListener('close', () => {
+        console.log('📺 WebSocket disconnected');
+        isConnected = false;
+        updateConnectionStatus('✗ Соединение разорвано', 'disconnected');
+    });
+
+    // Обработчик сообщений
+    ws.addEventListener('message', (ev) => {
+        try {
+            console.log('📺 Received message:', ev.data);
+            const msg = JSON.parse(ev.data);
+            
+            if (msg.type === 'joined') {
+                participantCount++;
+                updateParticipantCount();
+                showBubble(msg.name, msg.color);
+                console.log('🎉 Showing bubble for:', msg.name, 'Total participants:', participantCount);
+            }
+        } catch(e){
+            console.error('❌ Error parsing message:', e);
+        }
+    });
+
+    function showBubble(name, color) {
         const bubble = document.createElement('div');
         bubble.className = 'bubble';
         bubble.innerHTML = "Добро пожаловать, " + escapeHtml(name) + "!";
+        
+        // Используем переданный цвет или случайный
+        const bubbleColor = color || '#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0');
+        bubble.style.borderColor = bubbleColor;
+        bubble.style.background = `linear-gradient(135deg, rgba(255,255,255,0.95), ${bubbleColor}20)`;
 
         const map = document.querySelector('.map');
         const rect = map.getBoundingClientRect();
 
-        const x = rect.left + Math.random() * rect.width;
-        const y = rect.top + Math.random() * rect.height;
+        // Генерируем случайные координаты в пределах карты
+        const x = rect.left + 50 + Math.random() * (rect.width - 100);
+        const y = rect.top + 50 + Math.random() * (rect.height - 100);
 
         bubble.style.left = x + "px";
         bubble.style.top = y + "px";
 
         document.body.appendChild(bubble);
 
-        setTimeout(() => bubble.remove(), 10000);
+        // Удаляем пузырек после анимации
+        setTimeout(() => {
+            if (bubble.parentNode) {
+                bubble.parentNode.removeChild(bubble);
+            }
+        }, 10000);
     }
+
+    // Автоматическое переподключение
+    setInterval(() => {
+        if (!isConnected && ws.readyState === WebSocket.CLOSED) {
+            console.log('🔄 Screen attempting to reconnect...');
+            updateConnectionStatus('⟳ Переподключение...', 'connecting');
+            location.reload();
+        }
+    }, 10000);
+
+    // Периодическая проверка соединения
+    setInterval(() => {
+        if (isConnected) {
+            console.log('📊 Current participants:', participantCount);
+        }
+    }, 30000);
+
 })();
 
 /*** ❄ Создание 3D-снежинок ❄ ***/
@@ -202,6 +332,16 @@
 
         document.body.appendChild(sn);
     }
+
+    // Периодическое обновление снежинок (каждые 30 секунд)
+    setInterval(() => {
+        const snowflakes = document.querySelectorAll('.snowflake');
+        snowflakes.forEach(snowflake => {
+            if (Math.random() > 0.7) { // 30% chance to update
+                snowflake.style.animationDuration = (Math.random() * 8 + 6) + "s";
+            }
+        });
+    }, 30000);
 })();
 </script>
 

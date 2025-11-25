@@ -6,11 +6,11 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.static(path.join(__dirname)));
+// Правильное обслуживание статических файлов
+app.use(express.static(__dirname));
 app.use(express.json());
 
-// Обслуживание статических файлов
+// Явные маршруты для HTML страниц
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'student.html'));
 });
@@ -19,10 +19,17 @@ app.get('/screen', (req, res) => {
     res.sendFile(path.join(__dirname, 'screen.html'));
 });
 
+// Fallback для прямых запросов к HTML файлам
+app.get('*.html', (req, res) => {
+    res.sendFile(path.join(__dirname, req.path));
+});
+
 // Запуск HTTP сервера
 const server = app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`📁 Serving files from: ${__dirname}`);
+    console.log(`🌐 Student page: https://winter-map.onrender.com/`);
+    console.log(`📺 Screen page: https://winter-map.onrender.com/screen`);
 });
 
 // WebSocket сервер
@@ -73,7 +80,6 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Обработка graceful shutdown
 process.on('SIGTERM', () => {
     console.log('🛑 SIGTERM received, shutting down gracefully');
     server.close(() => {

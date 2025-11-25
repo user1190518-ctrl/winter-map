@@ -106,6 +106,20 @@
         color: #1e3799;
         display: none;
     }
+
+    .status {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #666;
+    }
+
+    .status.connected {
+        color: #2ecc71;
+    }
+
+    .status.disconnected {
+        color: #e74c3c;
+    }
 </style>
 </head>
 
@@ -128,12 +142,17 @@
     <button class="btn-main" id="send">✨ Я здесь!</button>
 
     <div id="greeting"></div>
+    <div id="status" class="status"></div>
 </div>
 
 <script>
 (function(){
   const url = (location.protocol === 'https:' ? 'wss':'ws') + '://' + location.host + '/ws';
   const ws = new WebSocket(url);
+  
+  let isConnected = false;
+  const statusElement = document.getElementById('status');
+  const sendButton = document.getElementById('send');
 
   function escapeHtml(s) {
       return s.replace(/[&<>"']/g, c => ({
@@ -141,23 +160,109 @@
       }[c]));
   }
 
+  function updateStatus(message, isSuccess) {
+      statusElement.textContent = message;
+      statusElement.className = 'status ' + (isSuccess ? 'connected' : 'disconnected');
+  }
+
+  // Обработчик открытия соединения
+  ws.addEventListener('open', () => {
+      console.log('✅ WebSocket connected');
+      isConnected = true;
+      updateStatus('✓ Подключено к серверу', true);
+      sendButton.disabled = false;
+      sendButton.textContent = '✨ Я здесь!';
+  });
+
+  // Обработчик ошибок
+  ws.addEventListener('error', (error) => {
+      console.error('❌ WebSocket error:', error);
+      updateStatus('✗ Ошибка подключения', false);
+      sendButton.disabled = true;
+      sendButton.textContent = 'Подключение...';
+  });
+
+  // Обработчик закрытия соединения
+  ws.addEventListener('close', () => {
+      console.log('🔌 WebSocket disconnected');
+      isConnected = false;
+      updateStatus('✗ Соединение разорвано', false);
+      sendButton.disabled = true;
+      sendButton.textContent = 'Подключение...';
+  });
+
+  // Обработчик сообщений
   ws.addEventListener('message', (ev) => {
       try {
+          console.log('📨 Received message:', ev.data);
           const msg = JSON.parse(ev.data);
+          
           if (msg.type === 'ack') {
               const g = document.getElementById('greeting');
               g.style.display = 'block';
               g.innerHTML = "Добро пожаловать, " + escapeHtml(msg.name) + "!";
+              console.log('✅ Welcome message shown for:', msg.name);
+              
+              // Очищаем поле ввода
+              document.getElementById('name').value = '';
           }
-      } catch(e){}
+      } catch(e) {
+          console.error('❌ Error parsing message:', e);
+      }
   });
 
-  document.getElementById('send').addEventListener('click', () => {
+  // Обработчик кнопки
+  sendButton.addEventListener('click', () => {
       const name = document.getElementById('name').value.trim();
-      if (!name) return alert("Введите имя");
+      if (!name) {
+          alert("Пожалуйста, введите ваше имя");
+          return;
+      }
+      
+      if (!isConnected) {
+          alert('Нет подключения к серверу. Пожалуйста, подождите или обновите страницу.');
+          return;
+      }
+      
       const color = '#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0');
-      ws.send(JSON.stringify({ type: 'join', name, color }));
+      const message = { type: 'join', name, color };
+      
+      console.log('📤 Sending message:', message);
+      ws.send(JSON.stringify(message));
+      
+      // Временно блокируем кнопку чтобы избежать спама
+      sendButton.disabled = true;
+      sendButton.textContent = 'Отправляется...';
+      
+      setTimeout(() => {
+          if (isConnected) {
+              sendButton.disabled = false;
+              sendButton.textContent = '✨ Я здесь!';
+          }
+      }, 2000);
   });
+
+  // Обработчик нажатия Enter в поле ввода
+  document.getElementById('name').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+          document.getElementById('send').click();
+      }
+  });
+
+  // Автоматическое переподключение при потере соединения
+  setInterval(() => {
+      if (!isConnected && ws.readyState === WebSocket.CLOSED) {
+          console.log('🔄 Attempting to reconnect...');
+          updateStatus('⟳ Переподключение...', false);
+          location.reload();
+      }
+  }, 5000);
+
+  // Показываем статус подключения
+  updateStatus('⌛ Подключение к серверу...', false);
+  sendButton.disabled = true;
+  sendButton.textContent = 'Подключение...';
+
 })();
 </script>
 

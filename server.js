@@ -38,10 +38,11 @@ const connections = {
 };
 
 wss.on('connection', (ws, req) => {
-    console.log('🔗 New WebSocket connection:', req.url);
+    console.log('🔗 New WebSocket connection');
     
-    // Определяем тип клиента по URL
-    const isScreen = req.url.includes('screen');
+    // Временное решение: считаем первыми подключившихся экранами, остальных - студентами
+    // Это неидеально, но будет работать для демо
+    const isScreen = connections.screens.size === 0;
     
     if (isScreen) {
         connections.screens.add(ws);
@@ -65,17 +66,18 @@ wss.on('connection', (ws, req) => {
                 
                 // Рассылаем всем экранам
                 connections.screens.forEach(screen => {
-                    if (screen.readyState === WebSocket.OPEN) {
+                    if (screen.readyState === WebSocket.OPEN && screen !== ws) {
                         screen.send(JSON.stringify({
                             type: 'joined', 
                             name: data.name,
                             color: data.color,
                             id: uuidv4()
                         }));
+                        console.log(`📤 Sent to screen: ${data.name}`);
                     }
                 });
                 
-                console.log(`🎉 Sent welcome for: ${data.name}`);
+                console.log(`🎉 Sent welcome for: ${data.name} to ${connections.screens.size} screens`);
             }
         } catch (error) {
             console.error('❌ Error parsing message:', error);
@@ -83,13 +85,15 @@ wss.on('connection', (ws, req) => {
     });
 
     ws.on('close', () => {
-        if (isScreen) {
+        if (connections.screens.has(ws)) {
             connections.screens.delete(ws);
             console.log('📺 Screen disconnected');
         } else {
             connections.students.delete(ws);
             console.log('👤 Student disconnected');
         }
+        
+        console.log(`📊 Remaining: ${connections.students.size} students, ${connections.screens.size} screens`);
     });
 
     ws.on('error', (error) => {

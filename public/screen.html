@@ -1,122 +1,199 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Экран — Карта приветствий</title>
-<link rel="stylesheet" href="/style.css">
-</head>
-<body>
-  <div class="screen-wrap">
-    <div class="topbar">
-      <span>Зимняя языковая школа — Открытие</span>
-      <div class="counter" id="count">Участников: 0</div>
-    </div>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Экран приветствий</title>
 
-    <div id="mapContainer" class="map">
-      <!-- Карта России, загрузка по URL -->
-      <img
-        id="mapImg"
-        src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Flag-map_of_Russia.svg/1600px-Flag-map_of_Russia.svg.png"
-        alt="Карта России"
-        style="max-width: 100%; max-height: 100%; object-fit: contain;"
-      />
-    </div>
-  </div>
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: linear-gradient(180deg, 
+            #2ecc71 0%, 
+            #ffffff 50%, 
+            #3498db 100%
+        );
+    }
+
+    /* ЛОГОТИПЫ */
+    .logo-left {
+        position: fixed;
+        left: 20px;
+        top: 20px;
+        width: 140px;
+        opacity: 0.95;
+        z-index: 10;
+    }
+
+    .logo-right {
+        position: fixed;
+        right: 20px;
+        top: 20px;
+        width: 120px;
+        opacity: 0.95;
+        z-index: 10;
+    }
+
+    /* ЗАГОЛОВОК */
+    .title {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 38px;
+        font-weight: 800;
+        color: #d63031;
+        text-align: center;
+        text-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        z-index: 5;
+        width: 100%;
+    }
+
+    /* КАРТА */
+    .map {
+        position: absolute;
+        top: 55%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 75%;
+        max-width: 1200px;
+        opacity: 1;
+        z-index: 1;
+    }
+
+    /* ПУЗЫРЬКИ */
+    .bubble {
+        position: absolute;
+        padding: 10px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 2px solid #1e3799;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+        font-size: 20px;
+        font-weight: 600;
+        animation: bubbleIn 1s ease, floatUp 10s linear infinite;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 20;
+    }
+
+    @keyframes bubbleIn {
+        0% { transform: scale(0.3); opacity: 0; }
+        60% { transform: scale(1.1); opacity: 1; }
+        100% { transform: scale(1); }
+    }
+
+    @keyframes floatUp {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-120px); opacity: 0; }
+    }
+
+    /* ❄ SNOW: падающие снежинки ❄ */
+    .snowflake {
+        position: fixed;
+        top: -10px;
+        color: white;
+        font-size: 20px;
+        opacity: 0.8;
+        filter: drop-shadow(0 0 6px rgba(255,255,255,0.8));
+        pointer-events: none;
+        z-index: 2; /* ниже пузырьков */
+        animation-name: fall;
+        animation-timing-function: linear;
+    }
+
+    @keyframes fall {
+        0% {
+            transform: translateY(-10px) rotate(0deg);
+            opacity: 0.3;
+        }
+        100% {
+            transform: translateY(110vh) rotate(360deg);
+            opacity: 0.9;
+        }
+    }
+</style>
+</head>
+
+<body>
+
+<!-- ЛОГОТИПЫ -->
+<img src="/logo2.png" class="logo-left">
+<img src="/logo.png" class="logo-right">
+
+<!-- ЗАГОЛОВОК -->
+<div class="title">Школа русского языка и культуры России 2025</div>
+
+<!-- КАРТА -->
+<img src="/map.png" class="map">
 
 <script>
+/*** WebSocket приветствия ***/
 (function(){
-  const url = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws';
-  const ws = new WebSocket(url);
-  const participants = new Map(); 
-  const container = document.getElementById('mapContainer');
-  const counterEl = document.getElementById('count');
 
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
+    const url = (location.protocol === 'https:' ? 'wss':'ws') + '://' + location.host + '/ws';
+    const ws = new WebSocket(url);
 
-  function updateCount() {
-    counterEl.textContent = 'Участников: ' + participants.size;
-  }
-
-  function createBubble(id, name, color) {
-    const rect = container.getBoundingClientRect();
-    const paddingX = rect.width * 0.05;
-    const paddingY = rect.height * 0.05;
-    const x = Math.random() * (rect.width - paddingX*2) + paddingX;
-    const y = Math.random() * (rect.height - paddingY*2) + paddingY;
-
-    const el = document.createElement('div');
-    el.className = 'bubble';
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
-    el.style.background = '#fff';
-    el.style.border = '3px solid ' + (color || '#0077d9');
-    el.style.color = '#111';
-    el.innerHTML = 'Добро пожаловать, ' + escapeHtml(name) + '!';
-
-    el.style.transform = 'translate(-50%, -50%)';
-    container.appendChild(el);
-
-    setTimeout(() => {
-      el.style.transition = 'opacity 1.2s, transform 1.2s';
-      el.style.opacity = '0.85';
-      el.style.transform += ' scale(0.98)';
-    }, 2000);
-
-    setTimeout(() => {
-      el.style.transition = 'opacity 800ms';
-      el.style.opacity = '0';
-      setTimeout(() => el.remove(), 900);
-    }, 25000);
-
-    return el;
-  }
-
-  ws.addEventListener('open', () => {
-    ws.send(JSON.stringify({ type: 'request_list' }));
-  });
-
-  ws.addEventListener('message', (ev) => {
-    let msg;
-    try { msg = JSON.parse(ev.data); } catch(e){ return; }
-
-    if (msg.type === 'joined') {
-      participants.set(msg.id, { name: msg.name, color: msg.color });
-      createBubble(msg.id, msg.name, msg.color);
-      updateCount();
+    function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, c => ({
+            '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+        }[c]));
     }
 
-    if (msg.type === 'list') {
-      msg.list.forEach(p => {
-        participants.set(p.id, { name: p.name, color: p.color });
-        setTimeout(() => createBubble(p.id, p.name, p.color), Math.random() * 1200);
-      });
-      updateCount();
+    ws.addEventListener('message', (ev) => {
+        try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'join') {
+                showBubble(msg.name);
+            }
+        } catch(e){}
+    });
+
+    function showBubble(name) {
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.innerHTML = "Добро пожаловать, " + escapeHtml(name) + "!";
+
+        const map = document.querySelector('.map');
+        const rect = map.getBoundingClientRect();
+
+        const x = rect.left + Math.random() * rect.width;
+        const y = rect.top + Math.random() * rect.height;
+
+        bubble.style.left = x + "px";
+        bubble.style.top = y + "px";
+
+        document.body.appendChild(bubble);
+
+        setTimeout(() => bubble.remove(), 10000);
     }
+})();
 
-    if (msg.type === 'left') {
-      participants.delete(msg.id);
-      updateCount();
+/*** ❄ SNOW EFFECT ❄ ***/
+(function createSnow() {
+    const snowCount = 25; // небольшое количество — не перекрывает контент
+
+    for (let i = 0; i < snowCount; i++) {
+        const sn = document.createElement("div");
+        sn.className = "snowflake";
+        sn.innerHTML = "❄";
+
+        const size = Math.random() * 18 + 8;   // размер 3D-стиля
+        const left = Math.random() * 100;      // позиция по ширине
+        const duration = Math.random() * 8 + 6; // скорость 6–14 сек
+        const delay = Math.random() * 5;        // рандомная задержка
+
+        sn.style.fontSize = size + "px";
+        sn.style.left = left + "vw";
+        sn.style.animationDuration = duration + "s";
+        sn.style.animationDelay = delay + "s";
+
+        document.body.appendChild(sn);
     }
-  });
-
-  container.addEventListener('click', (e) => {
-    const hint = document.createElement('div');
-    hint.className = 'bubble';
-    hint.style.left = e.clientX + 'px';
-    hint.style.top = e.clientY + 'px';
-    hint.style.transform = 'translate(-50%,-50%)';
-    hint.style.border = '2px dashed rgba(255,255,255,0.6)';
-    hint.style.background = 'rgba(0,0,0,0.6)';
-    hint.style.color = '#fff';
-    hint.textContent = 'Здесь может появиться приветствие';
-    container.appendChild(hint);
-    setTimeout(()=> { hint.remove(); }, 1600);
-  });
-
 })();
 </script>
+
 </body>
 </html>

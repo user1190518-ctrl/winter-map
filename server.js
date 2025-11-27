@@ -1,132 +1,73 @@
-(function(){
-  const url = (location.protocol === 'https:' ? 'wss':'ws') + '://' + location.host + '/ws';
-  let ws;
-  let reconnectAttempts = 0;
-  const maxReconnectAttempts = 5;
-  
-  let isConnected = false;
-  const statusElement = document.getElementById('status');
-  const sendButton = document.getElementById('send');
-  const inputContainer = document.getElementById('inputContainer');
-  const nameInput = document.getElementById('name');
+const express = require('express');
+const WebSocket = require('ws');
+const path = require('path');
 
-  function connectWebSocket() {
-    ws = new WebSocket(url);
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Обслуживание статических файлов
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Основные маршруты
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'student.html'));
+});
+
+app.get('/screen', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'screen.html'));
+});
+
+// Health check для Render
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', time: new Date().toISOString() });
+});
+
+// Запуск сервера
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server started on port ${PORT}`);
+});
+
+// Простой WebSocket
+const wss = new WebSocket.Server({ 
+    server: server,
+    path: '/ws'
+});
+
+wss.on('connection', (ws) => {
+    console.log('🔗 New client connected');
     
-    ws.addEventListener('open', () => {
-        console.log('✅ WebSocket connected');
-        isConnected = true;
-        reconnectAttempts = 0;
-        updateStatus('✓ Подключено к серверу', true);
-        sendButton.disabled = false;
-        sendButton.textContent = '✨ Привет!';
-    });
-
-    ws.addEventListener('error', (error) => {
-        console.error('❌ WebSocket error:', error);
-        updateStatus('✗ Ошибка подключения', false);
-        sendButton.disabled = true;
-        sendButton.textContent = 'Подключение...';
-    });
-
-    ws.addEventListener('close', () => {
-        console.log('🔌 WebSocket disconnected');
-        isConnected = false;
-        updateStatus('✗ Соединение разорвано', false);
-        sendButton.disabled = true;
-        sendButton.textContent = 'Подключение...';
-        
-        // Автоматическое переподключение
-        if (reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++;
-            console.log(`🔄 Attempting to reconnect... (${reconnectAttempts}/${maxReconnectAttempts})`);
-            updateStatus(`⟳ Переподключение... (${reconnectAttempts}/${maxReconnectAttempts})`, false);
-            setTimeout(connectWebSocket, 2000);
-        }
-    });
-
-    ws.addEventListener('message', (ev) => {
+    ws.on('message', (message) => {
         try {
-            console.log('📨 Received message:', ev.data);
-            const msg = JSON.parse(ev.data);
+            const data = JSON.parse(message);
             
-            if (msg.type === 'ack') {
-                const g = document.getElementById('greeting');
-                g.style.display = 'block';
-                g.innerHTML = "Добро пожаловать, " + escapeHtml(msg.name) + "!";
-                console.log('✅ Welcome message shown for:', msg.name);
+            if (data.type === 'join') {
+                // Отправляем подтверждение обратно
+                ws.send(JSON.stringify({
+                    type: 'ack',
+                    name: data.name
+                }));
                 
-                // Скрываем поле ввода и кнопку после успешной отправки
-                hideInputField();
-            } else if (msg.type === 'connected') {
-                console.log('✅ Server confirmed connection');
+                // Рассылаем всем остальным клиентам
+                wss.clients.forEach(client => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'joined',
+                            name: data.name,
+                            color: data.color || '#000000'
+                        }));
+                    }
+                });
+                
+                console.log(`✅ Processed join for: ${data.name}`);
             }
-        } catch(e) {
-            console.error('❌ Error parsing message:', e);
+        } catch (error) {
+            console.error('❌ Error processing message:', error);
         }
     });
-  }
 
-  function escapeHtml(s) {
-      return s.replace(/[&<>"']/g, c => ({
-          '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-      }[c]));
-  }
+    ws.on('close', () => {
+        console.log('🔌 Client disconnected');
+    });
+});
 
-  function updateStatus(message, isSuccess) {
-      statusElement.textContent = message;
-      statusElement.className = 'status ' + (isSuccess ? 'connected' : 'disconnected');
-  }
-
-  function hideInputField() {
-      inputContainer.classList.add('hidden');
-      sendButton.classList.add('hidden');
-  }
-
-  // Обработчик кнопки
-  sendButton.addEventListener('click', () => {
-      const name = nameInput.value.trim();
-      if (!name) {
-          alert("Пожалуйста, введите ваше имя");
-          return;
-      }
-      
-      if (!isConnected || ws.readyState !== WebSocket.OPEN) {
-          alert('Нет подключения к серверу. Пожалуйста, подождите или обновите страницу.');
-          return;
-      }
-      
-      const color = '#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0');
-      const message = { type: 'join', name, color };
-      
-      console.log('📤 Sending message:', message);
-      ws.send(JSON.stringify(message));
-      
-      // Временно блокируем кнопку чтобы избежать спама
-      sendButton.disabled = true;
-      sendButton.textContent = 'Отправляется...';
-      
-      setTimeout(() => {
-          if (isConnected) {
-              sendButton.disabled = false;
-              sendButton.textContent = '✨ Привет!';
-          }
-      }, 2000);
-  });
-
-  // Обработчик нажатия Enter в поле ввода
-  nameInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-          sendButton.click();
-      }
-  });
-
-  // Начинаем подключение
-  connectWebSocket();
-
-  // Показываем статус подключения
-  updateStatus('⌛ Подключение к серверу...', false);
-  sendButton.disabled = true;
-  sendButton.textContent = 'Подключение...';
-
-})();
+console.log('🚀 WebSocket server setup complete');

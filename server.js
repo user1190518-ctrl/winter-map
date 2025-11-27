@@ -1,115 +1,132 @@
-const express = require('express');
-const WebSocket = require('ws');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+(function(){
+  const url = (location.protocol === 'https:' ? 'wss':'ws') + '://' + location.host + '/ws';
+  let ws;
+  let reconnectAttempts = 0;
+  const maxReconnectAttempts = 5;
+  
+  let isConnected = false;
+  const statusElement = document.getElementById('status');
+  const sendButton = document.getElementById('send');
+  const inputContainer = document.getElementById('inputContainer');
+  const nameInput = document.getElementById('name');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Обслуживание статических файлов из папки public
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
-
-// Явные маршруты для HTML страниц
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'student.html'));
-});
-
-app.get('/screen', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'screen.html'));
-});
-
-// Запуск HTTP сервера
-const server = app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📁 Serving files from: ${path.join(__dirname, 'public')}`);
-});
-
-// WebSocket сервер
-const wss = new WebSocket.Server({ 
-    server,
-    path: '/ws'
-});
-
-// Хранилище подключений
-const connections = {
-    students: new Set(),
-    screens: new Set()
-};
-
-wss.on('connection', (ws, req) => {
-    console.log('🔗 New WebSocket connection');
+  function connectWebSocket() {
+    ws = new WebSocket(url);
     
-    // Временное решение: считаем первыми подключившихся экранами, остальных - студентами
-    // Это неидеально, но будет работать для демо
-    const isScreen = connections.screens.size === 0;
-    
-    if (isScreen) {
-        connections.screens.add(ws);
-        console.log('📺 Screen connected');
-    } else {
-        connections.students.add(ws);
-        console.log('👤 Student connected');
-    }
-
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message.toString());
-            console.log('📨 Received:', data);
-            
-            if (data.type === 'join') {
-                // Отправляем подтверждение студенту
-                ws.send(JSON.stringify({
-                    type: 'ack',
-                    name: data.name
-                }));
-                
-                // Рассылаем всем экранам
-                connections.screens.forEach(screen => {
-                    if (screen.readyState === WebSocket.OPEN && screen !== ws) {
-                        screen.send(JSON.stringify({
-                            type: 'joined', 
-                            name: data.name,
-                            color: data.color,
-                            id: uuidv4()
-                        }));
-                        console.log(`📤 Sent to screen: ${data.name}`);
-                    }
-                });
-                
-                console.log(`🎉 Sent welcome for: ${data.name} to ${connections.screens.size} screens`);
-            }
-        } catch (error) {
-            console.error('❌ Error parsing message:', error);
-        }
+    ws.addEventListener('open', () => {
+        console.log('✅ WebSocket connected');
+        isConnected = true;
+        reconnectAttempts = 0;
+        updateStatus('✓ Подключено к серверу', true);
+        sendButton.disabled = false;
+        sendButton.textContent = '✨ Привет!';
     });
 
-    ws.on('close', () => {
-        if (connections.screens.has(ws)) {
-            connections.screens.delete(ws);
-            console.log('📺 Screen disconnected');
-        } else {
-            connections.students.delete(ws);
-            console.log('👤 Student disconnected');
-        }
+    ws.addEventListener('error', (error) => {
+        console.error('❌ WebSocket error:', error);
+        updateStatus('✗ Ошибка подключения', false);
+        sendButton.disabled = true;
+        sendButton.textContent = 'Подключение...';
+    });
+
+    ws.addEventListener('close', () => {
+        console.log('🔌 WebSocket disconnected');
+        isConnected = false;
+        updateStatus('✗ Соединение разорвано', false);
+        sendButton.disabled = true;
+        sendButton.textContent = 'Подключение...';
         
-        console.log(`📊 Remaining: ${connections.students.size} students, ${connections.screens.size} screens`);
+        // Автоматическое переподключение
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            console.log(`🔄 Attempting to reconnect... (${reconnectAttempts}/${maxReconnectAttempts})`);
+            updateStatus(`⟳ Переподключение... (${reconnectAttempts}/${maxReconnectAttempts})`, false);
+            setTimeout(connectWebSocket, 2000);
+        }
     });
 
-    ws.on('error', (error) => {
-        console.error('💥 WebSocket error:', error);
+    ws.addEventListener('message', (ev) => {
+        try {
+            console.log('📨 Received message:', ev.data);
+            const msg = JSON.parse(ev.data);
+            
+            if (msg.type === 'ack') {
+                const g = document.getElementById('greeting');
+                g.style.display = 'block';
+                g.innerHTML = "Добро пожаловать, " + escapeHtml(msg.name) + "!";
+                console.log('✅ Welcome message shown for:', msg.name);
+                
+                // Скрываем поле ввода и кнопку после успешной отправки
+                hideInputField();
+            } else if (msg.type === 'connected') {
+                console.log('✅ Server confirmed connection');
+            }
+        } catch(e) {
+            console.error('❌ Error parsing message:', e);
+        }
     });
-});
+  }
 
-// Статистика
-setInterval(() => {
-    console.log(`📊 Connections: ${connections.students.size} students, ${connections.screens.size} screens`);
-}, 30000);
+  function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({
+          '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+      }[c]));
+  }
 
-process.on('SIGTERM', () => {
-    console.log('🛑 SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('✅ Server closed');
-        process.exit(0);
-    });
-});
+  function updateStatus(message, isSuccess) {
+      statusElement.textContent = message;
+      statusElement.className = 'status ' + (isSuccess ? 'connected' : 'disconnected');
+  }
+
+  function hideInputField() {
+      inputContainer.classList.add('hidden');
+      sendButton.classList.add('hidden');
+  }
+
+  // Обработчик кнопки
+  sendButton.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (!name) {
+          alert("Пожалуйста, введите ваше имя");
+          return;
+      }
+      
+      if (!isConnected || ws.readyState !== WebSocket.OPEN) {
+          alert('Нет подключения к серверу. Пожалуйста, подождите или обновите страницу.');
+          return;
+      }
+      
+      const color = '#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0');
+      const message = { type: 'join', name, color };
+      
+      console.log('📤 Sending message:', message);
+      ws.send(JSON.stringify(message));
+      
+      // Временно блокируем кнопку чтобы избежать спама
+      sendButton.disabled = true;
+      sendButton.textContent = 'Отправляется...';
+      
+      setTimeout(() => {
+          if (isConnected) {
+              sendButton.disabled = false;
+              sendButton.textContent = '✨ Привет!';
+          }
+      }, 2000);
+  });
+
+  // Обработчик нажатия Enter в поле ввода
+  nameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+          sendButton.click();
+      }
+  });
+
+  // Начинаем подключение
+  connectWebSocket();
+
+  // Показываем статус подключения
+  updateStatus('⌛ Подключение к серверу...', false);
+  sendButton.disabled = true;
+  sendButton.textContent = 'Подключение...';
+
+})();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Стань частью России</title>
+<title>Добро пожаловать в РУДН</title>
 <link rel="stylesheet" href="/style.css">
 
 <style>
@@ -46,6 +46,12 @@
         opacity: 0.9;
     }
 
+    .logo2 {
+        width: 100px;
+        margin-bottom: 12px;
+        opacity: 0.9;
+    }
+
     h1 {
         font-size: 26px;
         font-weight: 800;
@@ -70,6 +76,14 @@
     .input-container {
         width: 100%;
         margin-top: 16px;
+        transition: all 0.5s ease;
+    }
+
+    .input-container.hidden {
+        opacity: 0;
+        height: 0;
+        margin: 0;
+        overflow: hidden;
     }
 
     input {
@@ -80,6 +94,7 @@
         border-radius: 12px;
         border: 2px solid #bbb;
         box-sizing: border-box;
+        transition: all 0.5s ease;
     }
 
     .btn-main {
@@ -98,6 +113,10 @@
 
     .btn-main:active {
         transform: scale(0.97);
+    }
+
+    .btn-main.hidden {
+        display: none;
     }
 
     #greeting {
@@ -126,20 +145,21 @@
 <body>
 <div class="card">
 
-    <!-- ЛОГОТИП -->
+    <!-- ЛОГОТИПЫ -->
     <img class="logo" src="logo.png" alt="Логотип">
+    <img class="logo2" src="logo2.png" alt="Логотип 2">
 
-    <h1>Стань частью России!</h1>
+    <h1>Добро пожаловать в РУДН!</h1>
 
     <div class="subtitle">Введите своё имя и нажмите кнопку ниже:</div>
     <div class="subtitle-small">Enter your name and press the button below:</div>
     <div class="subtitle-small">Entrez votre nom et appuyez sur le bouton ci-dessous:</div>
 
-    <div class="input-container">
+    <div class="input-container" id="inputContainer">
         <input id="name" placeholder="Ваше имя" maxlength="40">
     </div>
 
-    <button class="btn-main" id="send">✨ Я здесь!</button>
+    <button class="btn-main" id="send">✨ Привет!</button>
 
     <div id="greeting"></div>
     <div id="status" class="status"></div>
@@ -153,6 +173,8 @@
   let isConnected = false;
   const statusElement = document.getElementById('status');
   const sendButton = document.getElementById('send');
+  const inputContainer = document.getElementById('inputContainer');
+  const nameInput = document.getElementById('name');
 
   function escapeHtml(s) {
       return s.replace(/[&<>"']/g, c => ({
@@ -165,13 +187,19 @@
       statusElement.className = 'status ' + (isSuccess ? 'connected' : 'disconnected');
   }
 
+  function hideInputField() {
+      // Плавно скрываем поле ввода и кнопку
+      inputContainer.classList.add('hidden');
+      sendButton.classList.add('hidden');
+  }
+
   // Обработчик открытия соединения
   ws.addEventListener('open', () => {
       console.log('✅ WebSocket connected');
       isConnected = true;
       updateStatus('✓ Подключено к серверу', true);
       sendButton.disabled = false;
-      sendButton.textContent = '✨ Я здесь!';
+      sendButton.textContent = '✨ Привет!';
   });
 
   // Обработчик ошибок
@@ -203,8 +231,8 @@
               g.innerHTML = "Добро пожаловать, " + escapeHtml(msg.name) + "!";
               console.log('✅ Welcome message shown for:', msg.name);
               
-              // Очищаем поле ввода
-              document.getElementById('name').value = '';
+              // Скрываем поле ввода и кнопку после успешной отправки
+              hideInputField();
           }
       } catch(e) {
           console.error('❌ Error parsing message:', e);
@@ -213,7 +241,7 @@
 
   // Обработчик кнопки
   sendButton.addEventListener('click', () => {
-      const name = document.getElementById('name').value.trim();
+      const name = nameInput.value.trim();
       if (!name) {
           alert("Пожалуйста, введите ваше имя");
           return;
@@ -237,15 +265,15 @@
       setTimeout(() => {
           if (isConnected) {
               sendButton.disabled = false;
-              sendButton.textContent = '✨ Я здесь!';
+              sendButton.textContent = '✨ Привет!';
           }
       }, 2000);
   });
 
   // Обработчик нажатия Enter в поле ввода
-  document.getElementById('name').addEventListener('keypress', (e) => {
+  nameInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-          document.getElementById('send').click();
+          sendButton.click();
       }
   });
 
